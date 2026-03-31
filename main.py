@@ -9,7 +9,7 @@ import datetime as dt
 from dingtalk import DingTalkBot
 from fetchers.ptt import fetch_ptt_hot
 from fetchers.bahamut import fetch_bahamut_hot
-from fetchers.google_trends import fetch_google_trends_tw
+from fetchers.app_charts import fetch_appstore_tw_free_games, fetch_googleplay_tw_free_games
 
 TIMEZONE = ZoneInfo("Asia/Taipei")
 
@@ -20,12 +20,6 @@ POLITICS_KEYWORDS = (
     "韓國瑜", "侯友宜", "朱立倫", "蕭敬嚴", "徐巧芯", "葉元之", "兩岸", "統獨",
     "台獨", "中共", "解放軍", "美中", "台美", "制裁", "外交", "國防", "軍事",
     "烏克蘭", "俄羅斯", "以色列", "Gaza", "戰爭", "戰火", "抗議", "示威",
-)
-
-# 捕鱼游戏相关关键词（台湾地区）
-FISHING_GAME_KEYWORDS = (
-    "捕魚", "捕鱼", "打魚", "打鱼", "釣魚達人", "海底撈", "魚機",
-    "電子捕魚", "手機捕魚", "捕魚機",
 )
 
 
@@ -42,51 +36,23 @@ def _filter_political(items: list[dict], text_keys: tuple) -> list[dict]:
     return result
 
 
-def fetch_fishing_game_news(limit: int = 5) -> list[dict]:
-    """Fetch recent Taiwan fishing game news via Google News RSS."""
-    try:
-        import feedparser
-    except ImportError:
-        return []
-    results = []
-    for kw in ("台灣捕魚遊戲", "捕魚機 台灣", "捕魚遊戲 手機"):
-        url = f"https://news.google.com/rss/search?q={kw}&hl=zh-TW&gl=TW&ceid=TW:zh-Hant"
-        try:
-            feed = feedparser.parse(url)
-            for entry in feed.entries:
-                title = entry.get("title", "").strip()
-                link = entry.get("link", "").strip()
-                if not title or not link:
-                    continue
-                if any(r["title"] == title for r in results):
-                    continue
-                results.append({"title": title, "url": link})
-                if len(results) >= limit:
-                    return results
-        except Exception:
-            continue
-    return results[:limit]
-
-
 def build_report(
     ptt: list[dict] | Exception,
     bahamut: list[dict] | Exception,
-    trends: list[dict] | Exception,
-    fishing: list[dict] | Exception,
+    appstore: list[dict] | Exception,
+    googleplay: list[dict] | Exception,
 ) -> str:
     now = dt.datetime.now(tz=TIMEZONE).strftime("%Y-%m-%d %H:%M")
-    lines = [f"## 🇹🇼 台湾素材热点日报\n{now}\n"]
+    lines = [f"## \U0001f1f9\U0001f1fc 台湾素材热点日报\n{now}\n"]
 
-    # 巴哈姆特（最上方）
-    lines.append("### 🎮 巴哈姆特手游热帖")
+    # 巴哈姆特
+    lines.append("### \U0001f3ae 巴哈姆特手游热帖")
     if isinstance(bahamut, Exception):
         lines.append(f"> 获取失败：{bahamut}")
     elif not bahamut:
         lines.append("> 暂无数据")
     else:
-        filtered = _filter_political(bahamut, ("title", "board"))
-        if not filtered:
-            lines.append("> 今日热帖均为政治相关，已过滤")
+        filtered = _filter_political(bahamut, ("title",))
         for i, item in enumerate(filtered, 1):
             board = item.get("board", "")
             title = item["title"]
@@ -94,12 +60,12 @@ def build_report(
             lines.append(f"{i}. **[{board}]** [{title}]({url})")
     lines.append("")
 
-    # PTT 游戏版块
-    lines.append("### 💬 PTT 游戏版热帖")
+    # PTT
+    lines.append("### \U0001f4ac PTT 游戏版热帖")
     if isinstance(ptt, Exception):
         lines.append(f"> 获取失败：{ptt}")
     elif not ptt:
-        lines.append("> 暂无游戏相关版块数据")
+        lines.append("> 暂无数据")
     else:
         for item in ptt:
             board = item["board"]
@@ -108,40 +74,43 @@ def build_report(
             if top and not _is_political(top["title"]):
                 lines.append(f"- **[{board}]({board_url})** 热帖：[{top['title']}]({top['url']}) ({top['push']} 推)")
             else:
-                lines.append(f"- **[{board}]({board_url})**")
+                lines.append(f"- **[{board}]({board_url})** 暂无热帖")
     lines.append("")
 
-    # Google Trends Top5
-    lines.append("### 🔥 台湾今日热搜 Top5（Google Trends）")
-    if isinstance(trends, Exception):
-        lines.append(f"> 获取失败：{trends}")
-    elif not trends:
+    # App Store 台湾游戏免费榜
+    lines.append("### \U0001f34f App Store 台湾游戏免费榜 Top5")
+    if isinstance(appstore, Exception):
+        lines.append(f"> 获取失败：{appstore}")
+    elif not appstore:
         lines.append("> 暂无数据")
     else:
-        filtered = _filter_political(trends, ("query", "news_title"))
-        if not filtered:
-            lines.append("> 今日热搜均为政治相关，已过滤")
-        for i, item in enumerate(filtered[:5], 1):
-            query = item["query"]
-            traffic = item.get("traffic", "")
-            news_title = item.get("news_title", "")
-            news_url = item.get("news_url", "")
-            traffic_str = f" ({traffic})" if traffic else ""
-            if news_url and news_title:
-                lines.append(f"{i}. **{query}**{traffic_str} — [{news_title}]({news_url})")
+        for i, item in enumerate(appstore, 1):
+            name = item["name"]
+            dev = item.get("developer", "")
+            url = item.get("url", "")
+            dev_str = f" — {dev}" if dev else ""
+            if url:
+                lines.append(f"{i}. [{name}]({url}){dev_str}")
             else:
-                lines.append(f"{i}. **{query}**{traffic_str}")
+                lines.append(f"{i}. **{name}**{dev_str}")
     lines.append("")
 
-    # 捕鱼游戏新闻
-    lines.append("### 🎣 近期台湾捕鱼游戏相关新闻")
-    if isinstance(fishing, Exception):
-        lines.append(f"> 获取失败：{fishing}")
-    elif not fishing:
-        lines.append("> 暂无相关新闻")
+    # Google Play 台湾游戏免费榜
+    lines.append("### \U0001f916 Google Play 台湾游戏免费榜 Top5")
+    if isinstance(googleplay, Exception):
+        lines.append(f"> 获取失败：{googleplay}")
+    elif not googleplay:
+        lines.append("> 暂无数据（需安装 google-play-scraper）")
     else:
-        for i, item in enumerate(fishing, 1):
-            lines.append(f"{i}. [{item['title']}]({item['url']})")
+        for i, item in enumerate(googleplay, 1):
+            name = item["name"]
+            dev = item.get("developer", "")
+            url = item.get("url", "")
+            dev_str = f" — {dev}" if dev else ""
+            if url:
+                lines.append(f"{i}. [{name}]({url}){dev_str}")
+            else:
+                lines.append(f"{i}. **{name}**{dev_str}")
     lines.append("")
 
     return "\n".join(lines)
@@ -164,10 +133,10 @@ def main() -> int:
 
     bahamut = safe(fetch_bahamut_hot, limit=10)
     ptt = safe(fetch_ptt_hot, limit=5)
-    trends = safe(fetch_google_trends_tw, limit=10)
-    fishing = safe(fetch_fishing_game_news, limit=5)
+    appstore = safe(fetch_appstore_tw_free_games, limit=5)
+    googleplay = safe(fetch_googleplay_tw_free_games, limit=5)
 
-    report = build_report(ptt, bahamut, trends, fishing)
+    report = build_report(ptt, bahamut, appstore, googleplay)
     sys.stdout.reconfigure(encoding='utf-8', errors='replace')
     print(report)
 
@@ -175,7 +144,7 @@ def main() -> int:
         name
         for name, result in [
             ("PTT", ptt), ("巴哈姆特", bahamut),
-            ("Google Trends", trends), ("捕鱼新闻", fishing),
+            ("App Store", appstore), ("Google Play", googleplay),
         ]
         if isinstance(result, Exception)
     ]

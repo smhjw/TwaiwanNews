@@ -1,11 +1,11 @@
 # 台湾素材热点日报
 
-每天自动抓取台湾热点并推送到钉钉：
+每天自动抓取台湾游戏热点并推送到钉钉：
 
-- PTT 热门版块及热帖
-- Dcard 热门帖子
-- TikTok 热门话题（台湾区）
-- YouTube 台湾发烧影片
+- 巴哈姆特手游热帖（优先展示手游版块）
+- PTT 游戏相关版块热帖
+- App Store 台湾游戏免费榜 Top5
+- Google Play 台湾游戏免费榜 Top5
 
 ## 配置
 
@@ -16,7 +16,6 @@
 |------|------|
 | `DINGTALK_WEBHOOK` | 钉钉自定义机器人 Webhook 地址（必填） |
 | `DINGTALK_SECRET` | 钉钉加签密钥（启用加签时必填） |
-| `YOUTUBE_API_KEY` | YouTube Data API v3 Key（可选，不填跳过 YouTube 板块） |
 
 ### Variables（可选）
 | 名称 | 默认值 | 说明 |
@@ -30,17 +29,20 @@
 pip install -r requirements.txt
 cp .env.example .env  # 填入你的配置
 export $(cat .env | grep -v '#' | xargs)
-python main.py
+PYTHONIOENCODING=utf-8 python main.py
 ```
 
 ## GitHub Actions
 
 工作流文件：`.github/workflows/daily-taiwan-news.yml`
 
-默认每天 UTC 01:00（北京时间 09:00）触发。也可在 GitHub Actions 页面手动触发。
+默认每个工作日 UTC 01:30（北京时间 09:30）触发。也可在 GitHub Actions 页面手动触发。
 
-## 获取 YouTube API Key
+## 数据来源说明
 
-1. 前往 [Google Cloud Console](https://console.cloud.google.com/)
-2. 启用 YouTube Data API v3
-3. 创建 API 密钥，填入 `YOUTUBE_API_KEY`
+| 板块 | 来源 | 说明 |
+|------|------|------|
+| 巴哈姆特手游热帖 | forum.gamer.com.tw | 抓取首页热门版块，优先手游分类 |
+| PTT 游戏版热帖 | ptt.cc/bbs/hotboards | 仅展示游戏相关版块 |
+| App Store 免费榜 | iTunes RSS API | 台湾地区游戏分类（genre=6014） |
+| Google Play 免费榜 | google-play-scraper | 台湾地区搜索免費遊戲 |

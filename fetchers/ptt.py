@@ -49,6 +49,14 @@ def _fetch_board_top_post(s: requests.Session, board_url: str) -> dict | None:
         return None
 
 
+GAME_KEYWORDS = ("game", "games", "gaming", "遊戲", "電玩", "手遊", "RPG", "MMORPG", "steam", "Steam")
+
+
+def _is_game_board(board_name: str, category: str) -> bool:
+    combined = (board_name + category).lower()
+    return any(kw.lower() in combined for kw in GAME_KEYWORDS)
+
+
 def fetch_ptt_hot(limit: int = 5) -> list[dict]:
     s = _session()
     resp = s.get(PTT_HOT_BOARDS_URL, timeout=15)
@@ -56,13 +64,15 @@ def fetch_ptt_hot(limit: int = 5) -> list[dict]:
     soup = BeautifulSoup(resp.text, "html.parser")
 
     results = []
-    for a_tag in soup.select("a.board")[:limit * 2]:
+    for a_tag in soup.select("a.board"):
         name_tag = a_tag.select_one("div.board-name")
         cat_tag = a_tag.select_one("div.board-class")
         if not name_tag:
             continue
         board_name = name_tag.text.strip()
         category = cat_tag.text.strip() if cat_tag else ""
+        if not _is_game_board(board_name, category):
+            continue
         href = a_tag.get("href", "")
         board_url = f"https://www.ptt.cc{href}"
         top_post = _fetch_board_top_post(s, board_url)

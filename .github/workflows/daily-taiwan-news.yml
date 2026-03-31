@@ -28,7 +28,7 @@ jobs:
         env:
           DINGTALK_WEBHOOK: ${{ secrets.DINGTALK_WEBHOOK }}
           DINGTALK_SECRET: ${{ secrets.DINGTALK_SECRET }}
-          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
           DRY_RUN: ${{ vars.DRY_RUN || 'false' }}
           FAIL_ON_PARTIAL_ERROR: ${{ vars.FAIL_ON_PARTIAL_ERROR || 'false' }}
+          PYTHONIOENCODING: utf-8
         run: python main.py

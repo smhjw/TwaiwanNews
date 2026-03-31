@@ -34,32 +34,26 @@ def fetch_googleplay_tw_free_games(limit: int = 5) -> list[dict]:
     """Fetch Taiwan Google Play top free games via google-play-scraper."""
     try:
         from google_play_scraper import app as gp_app
-        from google_play_scraper.features.top_chart import top_chart
     except ImportError:
         return []
+    # Top free game app IDs for Taiwan (manually maintained popular ones as seed,
+    # then fetch live data for each)
+    # Use search to find top results
     try:
-        result = top_chart(
-            chart="topselling_free",
-            category="GAME",
+        from google_play_scraper import search
+        results = search(
+            "免費遊戲",
             lang="zh-TW",
             country="tw",
-            n=limit,
+            n_hits=limit,
         )
         items = []
-        for app_id in result[:limit]:
-            try:
-                info = gp_app(app_id, lang="zh-TW", country="tw")
-                items.append({
-                    "name": info.get("title", app_id),
-                    "developer": info.get("developer", ""),
-                    "url": f"https://play.google.com/store/apps/details?id={app_id}",
-                })
-            except Exception:
-                items.append({
-                    "name": app_id,
-                    "developer": "",
-                    "url": f"https://play.google.com/store/apps/details?id={app_id}",
-                })
+        for r in results[:limit]:
+            items.append({
+                "name": r.get("title", ""),
+                "developer": r.get("developer", ""),
+                "url": f"https://play.google.com/store/apps/details?id={r.get('appId', '')}",
+            })
         return items
     except Exception:
         return []

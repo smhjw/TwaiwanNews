@@ -1,118 +1,77 @@
 from __future__ import annotations
 
 import requests
+from bs4 import BeautifulSoup
 
 PTT_HOT_BOARDS_URL = "https://www.ptt.cc/bbs/hotboards.html"
-USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+
+
+def _session() -> requests.Session:
+    s = requests.Session()
+    s.cookies.set("over18", "1", domain="www.ptt.cc")
+    s.headers.update({"User-Agent": USER_AGENT})
+    return s
+
+
+def _fetch_board_top_post(s: requests.Session, board_url: str) -> dict | None:
+    try:
+        resp = s.get(board_url, timeout=10)
+        resp.raise_for_status()
+        soup = BeautifulSoup(resp.text, "html.parser")
+        entries = soup.select("div.r-ent")
+        best = None
+        best_push = -999
+        for entry in entries:
+            title_tag = entry.select_one("div.title a")
+            if not title_tag:
+                continue
+            nrec = entry.select_one("div.nrec span")
+            push = 0
+            if nrec:
+                txt = nrec.text.strip()
+                if txt == "爆":
+                    push = 100
+                elif txt.startswith("X"):
+                    push = -int(txt[1:]) if txt[1:].isdigit() else -1
+                elif txt.isdigit():
+                    push = int(txt)
+            if push > best_push:
+                best_push = push
+                href = title_tag.get("href", "")
+                best = {
+                    "title": title_tag.text.strip(),
+                    "url": f"https://www.ptt.cc{href}",
+                    "push": push,
+                }
+        return best
+    except Exception:
+        return None
 
 
 def fetch_ptt_hot(limit: int = 5) -> list[dict]:
-    """Fetch top hot boards and their top post from PTT."""
-    session = requests.Session()
-    session.cookies.set("over18", "1", domain="www.ptt.cc")
-    headers = {"User-Agent": USER_AGENT}
-
-    resp = session.get(PTT_HOT_BOARDS_URL, headers=headers, timeout=15)
+    s = _session()
+    resp = s.get(PTT_HOT_BOARDS_URL, timeout=15)
     resp.raise_for_status()
-
-    from html.parser import HTMLParser
-
-    class HotBoardParser(HTMLParser):
-        def __init__(self):
-            super().__init__()
-            self.boards: list[dict] = []
-            self._in_board = False
-            self._in_name = False
-            self._in_class = False
-            self._current: dict = {}
-
-        def handle_starttag(self, tag, attrs):
-            attrs_dict = dict(attrs)
-            cls = attrs_dict.get("class", "")
-            if tag == "a" and "board" in cls:
-                self._in_board = True
-                href = attrs_dict.get("href", "")
-                self._current = {"url": f"https://www.ptt.cc{href}"}
-            if self._in_board and tag == "div" and "board-name" in cls:
-                self._in_name = True
-            if self._in_board and tag == "div" and "board-class" in cls:
-                self._in_class = True
-
-        def handle_data(self, data):
-            if self._in_name:
-                self._current["name"] = data.strip()
-                self._in_name = False
-            if self._in_class:
-                self._current["category"] = data.strip()
-                self._in_class = False
-
-        def handle_endtag(self, tag):
-            if self._in_board and tag == "a":
-                if self._current.get("name"):
-                    self.boards.append(self._current)
-                self._in_board = False
-                self._current = {}
-
-    parser = HotBoardParser()
-    parser.feed(resp.text)
-    boards = parser.boards[:limit]
+    soup = BeautifulSoup(resp.text, "html.parser")
 
     results = []
-    for board in boards:
-        try:
-            top_post = _fetch_board_top_post(session, headers, board["url"])
-            results.append({
-                "board": board["name"],
-                "category": board.get("category", ""),
-                "top_post": top_post,
-            })
-        except Exception:
-            results.append({
-                "board": board["name"],
-                "category": board.get("category", ""),
-                "top_post": None,
-            })
+    for a_tag in soup.select("a.board")[:limit * 2]:
+        name_tag = a_tag.select_one("div.board-name")
+        cat_tag = a_tag.select_one("div.board-class")
+        if not name_tag:
+            continue
+        board_name = name_tag.text.strip()
+        category = cat_tag.text.strip() if cat_tag else ""
+        href = a_tag.get("href", "")
+        board_url = f"https://www.ptt.cc{href}"
+        top_post = _fetch_board_top_post(s, board_url)
+        results.append({
+            "board": board_name,
+            "category": category,
+            "board_url": board_url,
+            "top_post": top_post,
+        })
+        if len(results) >= limit:
+            break
     return results
-
-
-def _fetch_board_top_post(session: requests.Session, headers: dict, board_url: str) -> dict | None:
-    resp = session.get(board_url, headers=headers, timeout=15)
-    resp.raise_for_status()
-
-    from html.parser import HTMLParser
-
-    class PostParser(HTMLParser):
-        def __init__(self):
-            super().__init__()
-            self.posts: list[dict] = []
-            self._in_row = False
-            self._in_title = False
-            self._current: dict = {}
-            self._depth = 0
-
-        def handle_starttag(self, tag, attrs):
-            attrs_dict = dict(attrs)
-            cls = attrs_dict.get("class", "")
-            if tag == "div" and "r-ent" in cls:
-                self._in_row = True
-                self._current = {}
-            if self._in_row and tag == "a":
-                href = attrs_dict.get("href", "")
-                if "/bbs/" in href:
-                    self._current["url"] = f"https://www.ptt.cc{href}"
-                    self._in_title = True
-
-        def handle_data(self, data):
-            if self._in_title:
-                self._current["title"] = data.strip()
-                self._in_title = False
-
-        def handle_endtag(self, tag):
-            if self._in_row and tag == "div":
-                if self._current.get("title"):
-                    self.posts.append(self._current)
-                self._in_row = False
-
-    parser = PostParser()
-    parser.feed(resp.text)
-    return parser.posts[0] if parser.posts else None

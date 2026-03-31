@@ -2,34 +2,45 @@ from __future__ import annotations
 
 import requests
 
-USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-# TikTok Creative Center trending songs (TW region)
-TIKTOK_TRENDING_URL = "https://ads.tiktok.com/creative_radar_api/v1/popular_trend/hashtag/list"
+# Google Trends daily search trends for Taiwan region
+GOOGLE_TRENDS_URL = (
+    "https://trends.google.com/trends/api/dailytrends"
+    "?hl=zh-TW&tz=-480&geo=TW&ns=15"
+)
+USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
 
 
 def fetch_tiktok_trending(limit: int = 5) -> list[dict]:
-    """Fetch trending hashtags from TikTok Creative Center (TW region)."""
-    headers = {
-        "User-Agent": USER_AGENT,
-        "Referer": "https://ads.tiktok.com/",
-    }
-    params = {
-        "period": 7,
-        "country_code": "TW",
-        "page": 1,
-        "limit": limit,
-    }
-    resp = requests.get(TIKTOK_TRENDING_URL, headers=headers, params=params, timeout=15)
-    resp.raise_for_status()
-    data = resp.json()
+    """Fetch Taiwan daily trending searches from Google Trends (replaces TikTok)."""
+    import json
 
-    items = []
-    # Navigate response structure: data.data.list
-    raw_list = data.get("data", {}).get("list", [])
-    for item in raw_list[:limit]:
-        items.append({
-            "hashtag": item.get("hashtag_name", ""),
-            "posts_count": item.get("publish_cnt", 0),
-            "views": item.get("video_views", 0),
+    headers = {"User-Agent": USER_AGENT}
+    resp = requests.get(GOOGLE_TRENDS_URL, headers=headers, timeout=15)
+    resp.raise_for_status()
+
+    # Google Trends prepends ")]}'\n" to prevent XSSI
+    text = resp.text
+    for prefix in (")]}'\n", ")]}\'\n", ")]}'"):
+        if text.startswith(prefix):
+            text = text[len(prefix):]
+            break
+
+    data = json.loads(text)
+    trending_searches = (
+        data.get("default", {})
+        .get("trendingSearchesDays", [{}])[0]
+        .get("trendingSearches", [])
+    )
+
+    results = []
+    for item in trending_searches[:limit]:
+        title = item.get("title", {}).get("query", "")
+        traffic = item.get("formattedTraffic", "")
+        articles = item.get("articles", [])
+        url = articles[0].get("url", "") if articles else ""
+        results.append({
+            "hashtag": title,
+            "traffic": traffic,
+            "url": url,
         })
-    return items
+    return results

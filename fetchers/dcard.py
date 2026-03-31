@@ -1,31 +1,35 @@
 from __future__ import annotations
 
+import xml.etree.ElementTree as ET
+
 import requests
 
-DCARD_API = "https://www.dcard.tw/service/api/v2/posts"
-USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+DCARD_RSS = "https://www.dcard.tw/rss"
+USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
 
 
 def fetch_dcard_hot(limit: int = 5) -> list[dict]:
-    """Fetch hot posts from Dcard public API."""
+    """Fetch hot posts from Dcard RSS feed."""
     headers = {
         "User-Agent": USER_AGENT,
-        "Referer": "https://www.dcard.tw/",
+        "Accept": "application/rss+xml, application/xml, text/xml",
     }
-    params = {
-        "popular": "true",
-        "limit": limit,
-    }
-    resp = requests.get(DCARD_API, headers=headers, params=params, timeout=15)
+    resp = requests.get(DCARD_RSS, headers=headers, timeout=15)
     resp.raise_for_status()
-    posts = resp.json()
+
+    root = ET.fromstring(resp.content)
+    ns = {"dc": "http://purl.org/dc/elements/1.1/"}
+
+    items = root.findall(".//item")
     results = []
-    for post in posts[:limit]:
+    for item in items[:limit]:
+        title = item.findtext("title", "").strip()
+        url = item.findtext("link", "").strip()
+        category = item.findtext("category", "").strip()
         results.append({
-            "title": post.get("title", ""),
-            "forum": post.get("forumName", ""),
-            "like_count": post.get("likeCount", 0),
-            "comment_count": post.get("commentCount", 0),
-            "url": f"https://www.dcard.tw/f/{post.get('forumAlias', '')}/p/{post.get('id', '')}",
+            "title": title,
+            "forum": category,
+            "url": url,
+            "like_count": 0,
         })
     return results

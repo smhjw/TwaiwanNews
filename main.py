@@ -64,8 +64,8 @@ def build_report(
             lines.append(f"{i}. **[{forum}]** [{title}]({url}) 👍{likes}")
     lines.append("")
 
-    # TikTok
-    lines.append("### 🎵 TikTok 热门话题")
+    # TikTok (replaced with Google Trends TW)
+    lines.append("### 🔥 台湾热搜趋势（Google Trends）")
     if isinstance(tiktok, Exception):
         lines.append(f"> 获取失败：{tiktok}")
     elif not tiktok:
@@ -73,9 +73,12 @@ def build_report(
     else:
         for i, item in enumerate(tiktok, 1):
             tag = item["hashtag"]
-            views = _fmt_number(item["views"])
-            posts = _fmt_number(item["posts_count"])
-            lines.append(f"{i}. **#{tag}** 播放量:{views} 投稿数:{posts}")
+            traffic = item.get("traffic", "")
+            url = item.get("url", "")
+            if url:
+                lines.append(f"{i}. **{tag}** {traffic} [详情]({url})")
+            else:
+                lines.append(f"{i}. **{tag}** {traffic}")
     lines.append("")
 
     # YouTube

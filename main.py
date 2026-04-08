@@ -131,7 +131,7 @@ def main() -> int:
         except Exception as e:
             return e
 
-    bahamut = safe(fetch_bahamut_hot, limit=10)
+    bahamut = safe(fetch_bahamut_hot, limit=5)
     ptt = safe(fetch_ptt_hot, limit=5)
     appstore = safe(fetch_appstore_tw_free_games, limit=5)
     googleplay = safe(fetch_googleplay_tw_free_games, limit=5)

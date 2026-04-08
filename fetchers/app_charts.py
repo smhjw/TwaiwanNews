@@ -33,27 +33,42 @@ def fetch_appstore_tw_free_games(limit: int = 5) -> list[dict]:
 def fetch_googleplay_tw_free_games(limit: int = 5) -> list[dict]:
     """Fetch Taiwan Google Play top free games via google-play-scraper."""
     try:
-        from google_play_scraper import app as gp_app
-    except ImportError:
-        return []
-    # Top free game app IDs for Taiwan (manually maintained popular ones as seed,
-    # then fetch live data for each)
-    # Use search to find top results
-    try:
         from google_play_scraper import search
+        
+        # In newer versions of google_play_scraper, collection('TOP_FREE') is broken
+        # due to Google Play DOM changes. A reliable workaround is using 'search' 
+        # with localized high-traffic keywords for Taiwan free game charts.
         results = search(
-            "免費遊戲",
+            "免費遊戲排行榜",
             lang="zh-TW",
             country="tw",
-            n_hits=limit,
+            n_hits=limit * 3,  # Fetch extra to filter out paid/duplicates
         )
+        
         items = []
-        for r in results[:limit]:
-            items.append({
-                "name": r.get("title", ""),
-                "developer": r.get("developer", ""),
-                "url": f"https://play.google.com/store/apps/details?id={r.get('appId', '')}",
-            })
+        seen = set()
+        
+        for r in results:
+            title = r.get("title", "").strip()
+            if not title:
+                continue
+                
+            # Skip paid apps if any slip into search results
+            price = r.get("price")
+            if price and price != 0 and str(price) != "0":
+                continue
+                
+            if title not in seen:
+                seen.add(title)
+                items.append({
+                    "name": title,
+                    "developer": r.get("developer", "").strip(),
+                    "url": f"https://play.google.com/store/apps/details?id={r.get('appId', '')}",
+                })
+                
+            if len(items) >= limit:
+                break
+                
         return items
     except Exception:
         return []

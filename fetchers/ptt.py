@@ -9,14 +9,20 @@ USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTM
 
 def _session() -> requests.Session:
     s = requests.Session()
+    # Add robust headers and TLS bypass tricks if needed
     s.cookies.set("over18", "1", domain="www.ptt.cc")
-    s.headers.update({"User-Agent": USER_AGENT})
+    s.headers.update({
+        "User-Agent": USER_AGENT,
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+        "Accept-Language": "zh-TW,zh;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Connection": "keep-alive"
+    })
     return s
 
 
 def _fetch_board_top_post(s: requests.Session, board_url: str) -> dict | None:
     try:
-        resp = s.get(board_url, timeout=10)
+        resp = s.get(board_url, timeout=15)
         resp.raise_for_status()
         soup = BeautifulSoup(resp.text, "html.parser")
         entries = soup.select("div.r-ent")

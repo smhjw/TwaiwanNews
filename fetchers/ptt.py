@@ -5,6 +5,10 @@ from bs4 import BeautifulSoup
 
 PTT_HOT_BOARDS_URL = "https://www.ptt.cc/bbs/hotboards.html"
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+TRANSIENT_REQUEST_ERRORS = (
+    requests.exceptions.ConnectionError,
+    requests.exceptions.Timeout,
+)
 
 
 def _session() -> requests.Session:
@@ -15,14 +19,31 @@ def _session() -> requests.Session:
         "User-Agent": USER_AGENT,
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
         "Accept-Language": "zh-TW,zh;q=0.9,en-US;q=0.8,en;q=0.7",
-        "Connection": "keep-alive"
+        "Connection": "close",
     })
     return s
 
 
+def _get_with_retries(
+    session: requests.Session,
+    url: str,
+    *,
+    timeout: int = 15,
+    attempts: int = 3,
+) -> requests.Response:
+    last_error = None
+    for _ in range(attempts):
+        try:
+            return session.get(url, timeout=timeout)
+        except TRANSIENT_REQUEST_ERRORS as exc:
+            last_error = exc
+    assert last_error is not None
+    raise last_error
+
+
 def _fetch_board_top_post(s: requests.Session, board_url: str) -> dict | None:
     try:
-        resp = s.get(board_url, timeout=15)
+        resp = _get_with_retries(s, board_url, timeout=15)
         resp.raise_for_status()
         soup = BeautifulSoup(resp.text, "html.parser")
         entries = soup.select("div.r-ent")
@@ -65,7 +86,7 @@ def _is_game_board(board_name: str, category: str) -> bool:
 
 def fetch_ptt_hot(limit: int = 5) -> list[dict]:
     s = _session()
-    resp = s.get(PTT_HOT_BOARDS_URL, timeout=15)
+    resp = _get_with_retries(s, PTT_HOT_BOARDS_URL, timeout=15)
     resp.raise_for_status()
     soup = BeautifulSoup(resp.text, "html.parser")
 
